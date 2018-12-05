@@ -37,10 +37,10 @@ static void handler(int sig)
 	if (a_cas(&target_tid, ch.tid, 0) == (ch.tid | 0x80000000))
 		__syscall(SYS_futex, &target_tid, FUTEX_UNLOCK_PI|FUTEX_PRIVATE);
 
-	sem_wait(&ch.target_sem);
+	while (sem_wait(&ch.target_sem) && errno != EINTR);
 	callback(context);
 	sem_post(&ch.caller_sem);
-	sem_wait(&ch.target_sem);
+	while (sem_wait(&ch.target_sem) && errno != EINTR);
 
 	errno = old_errno;
 }
@@ -153,7 +153,7 @@ void __synccall(void (*func)(void *), void *ctx)
 	/* Serialize execution of callback in caught threads. */
 	for (cp=head; cp; cp=cp->next) {
 		sem_post(&cp->target_sem);
-		sem_wait(&cp->caller_sem);
+		while (sem_wait(&cp->caller_sem) && errno != EINTR);
 	}
 
 	sa.sa_handler = SIG_IGN;
